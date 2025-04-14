@@ -24,10 +24,10 @@ export class StockMovementRepository extends Repository<StockMovement> {
     id: string,
     { date, ...rest }: StockMovementUpdateDto,
   ): Promise<StockMovement> {
-    date = (DateUtil.adjustTimezone(date, 3).toISOString() as unknown) as Date;
+    console.log(date);
     const updateStockMovement = this.create({
-      date,
       ...rest,
+      date: DateUtil.adjustTimezone(date, 3).toISOString(),
     });
 
     await this.save({ ...updateStockMovement, id });
@@ -37,11 +37,21 @@ export class StockMovementRepository extends Repository<StockMovement> {
   async findAllStockMovements(
     productName?: string,
     movementType?: StockMovementType,
+    firstDate?: string | Date,
+    lastDate?: string | Date,
+    productsIds?: string[],
   ): Promise<StockMovement[]> {
     const query = this.createQueryBuilder('stockMovement').leftJoinAndSelect(
       'stockMovement.product',
       'product',
     );
+
+    if (firstDate && lastDate) {
+      query.andWhere('stockMovement.date BETWEEN :firstDate AND :lastDate', {
+        firstDate: firstDate,
+        lastDate: lastDate,
+      });
+    }
 
     if (productName) {
       query.andWhere('product.name LIKE :productName', {
@@ -52,6 +62,12 @@ export class StockMovementRepository extends Repository<StockMovement> {
     if (movementType) {
       query.andWhere('stockMovement.movementType = :movementType', {
         movementType,
+      });
+    }
+
+    if (productsIds && productsIds.length > 0) {
+      query.andWhere('stockMovement.productId IN (:...productsIds)', {
+        productsIds,
       });
     }
 

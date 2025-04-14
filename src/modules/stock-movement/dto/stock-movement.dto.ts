@@ -3,6 +3,7 @@ import { Exclude, Expose, Type } from 'class-transformer';
 import {
   IsBoolean,
   IsDate,
+  IsDateString,
   IsEnum,
   IsNumber,
   IsOptional,
@@ -59,18 +60,8 @@ export class StockMovementCreateDto {
 export class StockMovementUpdateDto {
   @Expose()
   @IsOptional()
-  @IsString()
-  productId?: string;
-
-  @Expose()
-  @IsOptional()
   @IsNumber()
   quantity?: number;
-
-  @Expose()
-  @IsOptional()
-  @IsEnum(StockMovementType)
-  movementType?: StockMovementType;
 
   @IsOptional()
   @IsNumber()
@@ -99,4 +90,12 @@ export class StockMovementQueryDto {
 
   @IsOptional()
   movementType?: StockMovementType;
+
+  @IsDateString({}, { message: 'Invalid date format. Use YYYY-MM-DD.' })
+  @IsOptional()
+  firstDate?: string;
+
+  @IsDateString({}, { message: 'Invalid date format. Use YYYY-MM-DD.' })
+  @IsOptional()
+  lastDate?: string;
 }

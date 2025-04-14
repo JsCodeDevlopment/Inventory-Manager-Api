@@ -1,36 +1,93 @@
 import { Report } from '@/modules/report/report.entity';
 import { ReportRepository } from '@/modules/report/report.repository';
-import { ReportType } from '@/types/enums/report-type.enum';
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { GenerateSalesReportDTO, ReportInterface } from './dto/report.dto';
+import { StockMovementRepository } from '../stock-movement/stock-movement.repository';
+import { ServiceRepository } from '../service/service.repository';
+import { ProductRepository } from '../product/product.repository';
 
 @Injectable()
 export class ReportService {
-  constructor(private reportRepository: ReportRepository) {}
+  constructor(
+    @InjectRepository(ReportRepository)
+    private reportRepository: ReportRepository,
 
-  async findReports(
-    title?: string,
-    type?: ReportType,
-    startDate?: Date,
-    endDate?: Date,
-  ): Promise<Report[]> {
-    return await this.reportRepository.findReports(
-      title,
-      type,
-      startDate,
-      endDate,
-    );
+    @InjectRepository(StockMovementRepository)
+    private stockMovementRepository: StockMovementRepository,
+
+    @InjectRepository(ServiceRepository)
+    private serviceRepository: ServiceRepository,
+
+    @InjectRepository(ProductRepository)
+    private productRepository: ProductRepository,
+  ) {}
+
+  async findReports(): Promise<Report[]> {
+    return await this.reportRepository.findReports();
   }
 
-  async generateSalesReport(
-    startDate: Date,
-    endDate: Date,
-    type: ReportType,
-  ): Promise<Report> {
-    return await this.reportRepository.generateSalesReport(
-      startDate,
-      endDate,
-      type,
+  async generateSalesReport({
+    type,
+    firstDate,
+    lastDate,
+    isServicePaid,
+    productsIds,
+  }: GenerateSalesReportDTO): Promise<Report> {
+    let totalExit = 0;
+    let totalEntry = 0;
+    console.log(firstDate, lastDate);
+
+    if (type === 'PRODUCT') {
+      const stockMovements = await this.stockMovementRepository.findAllStockMovements(
+        null,
+        null,
+        firstDate,
+        lastDate,
+        productsIds,
+      );
+
+      for (const movement of stockMovements) {
+        if (movement.movementType === 'EXIT') {
+          totalExit += movement.negotiatedValue;
+
+          const product = await this.productRepository.findOne(
+            movement.productId,
+          );
+          const costPerUnit = product.price;
+          totalEntry += costPerUnit * movement.quantity;
+        }
+      }
+
+      return await this.reportRepository.generateSalesReport({
+        type,
+        firstDate,
+        lastDate,
+        totalEntry,
+        totalExit,
+        finalBalance: totalExit - totalEntry,
+      });
+    }
+
+    const services = await this.serviceRepository.findAllServices(
+      null,
+      firstDate,
+      lastDate,
+      isServicePaid,
     );
+
+    services.forEach((service) => {
+      totalExit += service.value;
+    });
+
+    return await this.reportRepository.generateSalesReport({
+      type,
+      firstDate,
+      lastDate,
+      totalEntry: 0,
+      totalExit,
+      finalBalance: totalExit,
+    });
   }
 
   async getReportById(id: string): Promise<Report> {

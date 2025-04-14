@@ -44,7 +44,12 @@ export class ProductRepository extends Repository<Product> {
       purchaseDate,
       3,
     ).toISOString() as unknown) as Date;
-    const newProduct = this.create({ purchaseDate, ...restProduct });
+    const newProduct = this.create({
+      ...restProduct,
+      purchaseDate,
+      price: restProduct.price / restProduct.quantity,
+    });
+
     const savedProduct = await this.save(newProduct);
 
     const stockMovement = new StockMovement();
@@ -70,27 +75,13 @@ export class ProductRepository extends Repository<Product> {
       throw new Error('Product not found');
     }
 
-    purchaseDate = (DateUtil.adjustTimezone(
-      purchaseDate,
-      3,
-    ).toISOString() as unknown) as Date;
-    const updatedProduct = this.create({ purchaseDate, ...restProduct });
+    const updatedProduct = this.create({
+      ...restProduct,
+      ...(purchaseDate && {
+        purchaseDate: DateUtil.adjustTimezone(purchaseDate, 3).toISOString(),
+      }),
+    });
     await this.save({ ...updatedProduct, id });
-
-    if (restProduct.price !== undefined || restProduct.quantity !== undefined) {
-      const lastStockMovement = await this.manager.findOne(StockMovement, {
-        where: { productId: id },
-        order: { date: 'DESC' },
-      });
-
-      if (lastStockMovement) {
-        if (restProduct.quantity !== undefined) {
-          lastStockMovement.quantity = restProduct.quantity;
-        }
-        lastStockMovement.date = new Date();
-        await this.manager.save(lastStockMovement);
-      }
-    }
 
     return await this.findOne(id);
   }

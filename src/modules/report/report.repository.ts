@@ -1,67 +1,20 @@
 import { Report } from '@/modules/report/report.entity';
-import { StockMovement } from '@/modules/stock-movement/stock-movement.entity';
-import { ReportType } from '@/types/enums/report-type.enum';
 import { EntityRepository, Repository } from 'typeorm';
+import { CreateReporterDTO } from './dto/report.dto';
+import { DateUtil } from '@/utils/date.util';
 
 @EntityRepository(Report)
 export class ReportRepository extends Repository<Report> {
-  async findReports(
-    title?: string,
-    type?: ReportType,
-    startDate?: Date,
-    endDate?: Date,
-  ): Promise<Report[]> {
+  async findReports(): Promise<Report[]> {
     const query = this.createQueryBuilder('report');
-
-    if (title) {
-      query.andWhere('report.title LIKE :title', {
-        title: `%${title}%`,
-      });
-    }
-
-    if (type) {
-      query.andWhere('report.type = :type', { type });
-    }
-
-    if (startDate) {
-      query.andWhere('report.generatedAt >= :startDate', { startDate });
-    }
-
-    if (endDate) {
-      query.andWhere('report.generatedAt <= :endDate', { endDate });
-    }
-
     return await query.getMany();
   }
 
-  async generateSalesReport(
-    startDate: Date,
-    endDate: Date,
-    type: ReportType,
-  ): Promise<Report> {
-    const stockMovements = await this.manager
-      .getRepository(StockMovement)
-      .createQueryBuilder('stockMovement')
-      .leftJoinAndSelect('stockMovement.product', 'product')
-      .leftJoinAndSelect('stockMovement.service', 'service')
-      .where('stockMovement.date >= :startDate', { startDate })
-      .andWhere('stockMovement.date <= :endDate', { endDate })
-      .getMany();
-
-    const reportData = stockMovements.map((movement) => ({
-      id: movement.id,
-      productId: movement.product?.id,
-      productName: movement.product?.name,
-      serviceId: movement.service?.id,
-      serviceName: movement.service?.device,
-      quantity: movement.quantity,
-      movementType: movement.movementType,
-      date: movement.date,
-    }));
-
+  async generateSalesReport(reportData: CreateReporterDTO): Promise<Report> {
     const report = this.create({
-      type,
-      data: reportData,
+      ...reportData,
+      firstDate: DateUtil.adjustTimezone(reportData.firstDate, 3).toISOString(),
+      lastDate: DateUtil.adjustTimezone(reportData.lastDate, 3).toISOString(),
       generatedAt: new Date(),
     });
 
